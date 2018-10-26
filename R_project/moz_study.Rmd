@@ -1,0 +1,208 @@
+---
+title: 'R Project: Mozambique Study'
+author: "Kaci Pickett"
+date: "October 22, 2018"
+output: word_document
+---
+
+use tmap and tmap tools
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+op <- par()
+options(width=80)
+emptyenv()
+rm(list=ls())
+#install.packages(c("XML", "reshape2", "data.table"))
+#install.packages("tmaptools")
+
+library(XML)
+library(epitools)
+library(dplyr)
+library(reshape2)
+library(data.table)
+library(ggplot2)
+library(stats)
+library(RColorBrewer)
+library(sp)
+library(maptools) 
+library(lattice)
+library(latticeExtra) # For layer()
+library(rgdal)
+library(tmap)
+library(tmaptools)
+#ccf function
+weath <- read.csv('C:/Users/Kaci/Desktop/BIOS 6640 R and Python/Data/MozSyntheticMalaria.csv') 
+weath2 <- subset(weath, Epiyear < 2017)
+weath2$denom <- weath2$Population_UN*weath2$u5weight
+weath2$cpt <- (weath2$malaria/weath2$denom)*1000
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+#make multiple lags for each of the weather variables to find best weather -> symptoms incubation time
+#need to lag by number of weeks since cases are calculated on a weekly basis
+#need to lag within year because epiweek repeats for each year
+# weath2$rainTot_lag4 <- weath2 %>% group_by(weath2$Epiyear) %>% lag(weath2$Epiweek,4)
+#need to lag multiple columns in the same way... use an apply function?-- need to do this for 2 4 8 week lags for 13 of 26 variables
+weath3 <- weath2 %>% as_tibble() %>% mutate(
+  rainTot_lag2 =lag(rainTot,2),
+  tavg_lag2 =lag(tavg,2),
+  rainTot_lag4 =lag(rainTot,4),
+  tabove35_lag4 = lag(tabove35,4),
+  tabove30_lag4 = lag(tabove30,4),
+  tbelow20_lag4 = lag(tbelow20,4),
+  tbelow15_lag4 = lag(tbelow15,4),
+  pabove1_lag4 = lag(pabove1,4),
+  pabove50_lag4 = lag(pabove50,4),
+  pabove100_lag4 = lag(pabove100, 4),
+  rain_lag4 = lag(rain,4),
+  tavg_lag4 =lag(tavg,4),
+  rh_lag4 = lag(rh, 4),
+  sd_lag4 = lag(sd, 4),
+  psfc_lag4 = lag(psfc, 4),
+  rainTot_lag8 =lag(rainTot,8),
+  tavg_lag8 =lag(tavg,8),
+  tavg_lag16 =lag(tavg,16)
+)
+
+#this defs doesn't work
+# weath4 <- weath2 %>% as_tibble() %>% group_by(weath2$Epiyear) %>% 
+#   mutate_at(c("rainTot" ,  "tabove35",   "tabove30", "tbelow20", "tbelow15", "pabove1", "pabove50" ,    
+#  "pabove100", "rain", "tavg", "rh", "sd" ,"psfc"), lag(4))
+  
+
+
+head(weath3[,'rainTot_lag4'])
+```
+
+
+```{r, include=TRUE}
+lag_opt_rain <- ccf(weath3$rainTot,weath3$cpt, type = "correlation" )
+lag_opt_temp <- ccf(weath3$tavg,weath3$cpt, type = "correlation" )
+max(lag_opt_temp$acf) # need to find the name of the 'lag' vector that corresponds to the
+lag_opt_temp$lag[max(lag_opt_temp$acf)]
+
+ggplot(data = weath3) +
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt, linetype = "solid"))+
+  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag2, linetype = "dotted"), color = "maroon4")+
+  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag4, linetype = "dashed"))+
+  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag8, linetype = "longdash"))+
+  scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average rainfall")) +
+  labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+ggplot(data = weath3) +
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt, linetype = "solid"))+
+  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag2, linetype = "dotted"), color = "maroon4")+
+scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average rainfall")) +
+  labs(x = "Epidemiology week", y = "Cases per 1,000")
+              
+              
+ggplot(data = weath3) +
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt))+
+  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag2))+
+  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag4))+
+  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag8))+
+  scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average temp")) +
+  labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+
+```
+
+```{r, include= TRUE}
+
+
+#creating cases per thousand by district and year since cases per thousand won't be correct when we are summing over the weeks 
+malaria <- as.data.frame(tapply(weath3$malaria, list(weath3$DISTCODE, weath3$Epiyear), sum))
+colnames(malaria) <- c("mal10", "mal11", "mal12", "mal13", "mal14", "mal15", "mal16")
+
+denom <- as.data.frame(tapply(weath3$denom, list(weath3$DISTCODE, weath3$Epiyear), sum))
+colnames(denom) <- c("denom10", "denom11", "denom12", "denom13", "denom14", "denom15", "denom16")
+
+#both dataframes are the same length and in the same order so we can just divide to get cpt
+cpt <- (malaria/denom)*1000
+colnames(cpt) <- c("cpt10", "cpt11", "cpt12", "cpt13", "cpt14", "cpt15", "cpt16")
+
+
+rainTot <- as.data.frame(tapply(weath3$rainTot_lag4, list(weath3$DISTCODE, weath3$Epiyear), sum))
+colnames(rainTot) <- c("rain10", "rain11", "rain12", "rain13", "rain14", "rain15", "rain16")
+tavg <- as.data.frame(tapply(weath3$tavg_lag8, list(weath3$DISTCODE, weath3$Epiyear), mean))
+colnames(tavg) <- c("t10", "t11", "t12", "t13", "t14", "t15", "t16")
+
+#merge all data for plotting
+allstats <-as.data.frame(cbind(cpt, rainTot, tavg))
+
+# read in the Moz shape file for districts
+poly1 <- readShapePoly('C:/Users/Kaci/Desktop/BIOS 6640 R and Python/R Project/data_formats/Moz_admin2.shp', IDvar="DISTCODE")
+
+polydat <- SpatialPolygonsDataFrame(poly1, allstats)
+
+spplot(polydat, "cpt10", main = "Cases Per Thousand", sub = "2010")
+
+#in spplot draw = false in the scale()
+#smooth_map(polydat)
+tm_shape(polydat) + tm_polygons("rain10", palette = "-Blues")+   tm_bubbles("cpt10", col = "t10",
+border.col = "black", border.alpha = 0.5,
+ palette = "-RdYlGn", breaks = c(15, 17, 19, 21, 23, 25, 27),
+title.size = "Cases per Thousand (2010)", 
+title.col = "Temperature") +
+tm_format_World() + tm_style_gray()
+ 
+summary(allstats$t10) 
+
+
+
+```
+
+```{r}
+
+ggplot(data = weath3, mapping = aes(x = Region, y=log_rainTot)) + 
+  geom_boxplot()+
+  facet_wrap(~Epiyear, nrow = 2)
+
+
+ggplot(data = weath3) + 
+  geom_density(mapping = aes(x = cpt,color = as.factor(Epiyear)), position = "identity")+
+  facet_wrap(~Region, nrow = 2)
+#removed linetype = as.factor(Epiyear) from aes()
+
+
+
+tempbox <- ggplot(data = weath3, aes(Region, tavg, colour = as.factor(Epiyear))) +
+  geom_boxplot() +
+  ggtitle("Average Weekly Temperature over Time by Region")+
+  scale_color_brewer(palette = "YlOrRd")+
+  xlab("Region")+
+  ylab("Temperature")+ 
+  labs(colour="Year")+
+  theme_dark()
+
+tempbox
+
+#creating a log transform with 0's
+###need to use lag variables!!!!!
+hist(weath3$rainTot)
+weath3$log_rainTot <- ifelse(weath3$rainTot == 0, 0, log(weath3$rainTot))
+
+rainbox <- ggplot(data = weath3, aes(Region, log_rainTot, colour = as.factor(Epiyear))) + 
+  geom_boxplot() +
+  ggtitle("Rain Total Over Time by Region")+
+  scale_color_brewer(palette = "YlGnBu", direction = -1)+
+  xlab("Region")+
+  ylab("Log(Rain Total)")+ 
+  labs(colour="Year")+
+   theme_dark()
+
+rainbox
+
+```
+
+```{r}
+ggplot(data = weath3)+
+```
