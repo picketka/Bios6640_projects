@@ -5,7 +5,7 @@ date: "October 22, 2018"
 output: word_document
 ---
 
-use tmap and tmap tools
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -19,6 +19,7 @@ rm(list=ls())
 library(XML)
 library(epitools)
 library(dplyr)
+library(knitr)
 library(reshape2)
 library(data.table)
 library(ggplot2)
@@ -65,6 +66,7 @@ weath3 <- weath2 %>% as_tibble() %>% mutate(
   rain_lag4 = lag(rain,4),
   tavg_lag4 =lag(tavg,4),
   rh_lag4 = lag(rh, 4),
+  rh_lag8 = lag(rh, 8),
   sd_lag4 = lag(sd, 4),
   psfc_lag4 = lag(psfc, 4),
   rainTot_lag8 =lag(rainTot,8),
@@ -72,51 +74,173 @@ weath3 <- weath2 %>% as_tibble() %>% mutate(
   tavg_lag16 =lag(tavg,16)
 )
 
-#this defs doesn't work
-# weath4 <- weath2 %>% as_tibble() %>% group_by(weath2$Epiyear) %>% 
-#   mutate_at(c("rainTot" ,  "tabove35",   "tabove30", "tbelow20", "tbelow15", "pabove1", "pabove50" ,    
-#  "pabove100", "rain", "tavg", "rh", "sd" ,"psfc"), lag(4))
-  
+weath3 <- mutate(weath3, hyp.date= as.Date(paste(weath3$Epiyear, weath3$Epiweek, "1", sep="-"), format="%Y-%U-%u"))
+
+#create some summary statistics in a table
+tab1 <- weath3 %>% 
+  group_by(Epiyear) %>%
+  summarise(
+  cpt_m = round(mean(cpt, na.rm = TRUE),2),
+  rainTot_med = round(median(rainTot, na.rm = TRUE),2),
+  tavg_m = round(mean(tavg, na.rm = TRUE),2),
+  rh = round(mean(rh, na.rm = TRUE),2)
+)  
+
+colnames(tab1) <- c("Year", "Cases/1,000 U5", "Median Rainfall", "Average Temp (C)", "Relative Humidity")
+kable(tab1)
+
+#test to see if the lag worked
+#head(weath3[,'rainTot_lag4'])
+```
+```{r}
+#first relationship: are temp and rain associated with eachother is there possibly a lag between them
+ggplot(data = weath3) + 
+  geom_smooth(mapping = aes(x = Epiweek, y = rainTot), color="blue") +
+  geom_smooth(mapping = aes(x = Epiweek, y = tavg), color="orange")+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+  labs(x = "Epidemiology week", y = "Weekly rain total") +
+  facet_wrap(~Region, nrow = 2)+
+  ggtitle("Rain Total and Temperature Averaged over Time")+
+  labs(color = c("Rain", "Temperature"))
 
 
-head(weath3[,'rainTot_lag4'])
+
+
+
 ```
 
-
 ```{r, include=TRUE}
+#plot of autocorrlation of variables at different lag points
 lag_opt_rain <- ccf(weath3$rainTot,weath3$cpt, type = "correlation" )
+
 lag_opt_temp <- ccf(weath3$tavg,weath3$cpt, type = "correlation" )
-max(lag_opt_temp$acf) # need to find the name of the 'lag' vector that corresponds to the
-lag_opt_temp$lag[max(lag_opt_temp$acf)]
 
+#looking at if high rain levels are associated with high temp levels or if there is a lag
+#lag_opt_temp_rain <- ccf(weath3$tavg,weath3$rainTot, type = "correlation" )
+
+#look at lag_opt_var$acf to find the maximum correlation
+# max(lag_opt_temp$acf) # need to find the name of the 'lag' vector that corresponds to the
+# lag_opt_temp$lag[max(lag_opt_temp$acf)]
+
+#create a week/ year variable so we can look over the years and not just look at an average of years
+
+```
+
+```{r}
+#create a long format for the desired lags in order to plot
+rain_lags <- melt(weath3, 
+                  idvars = c("Epiweek", "Epiyear", "DISTCODE"),
+                  measure.vars = c("rainTot_lag2", "rainTot_lag4" ,"rainTot_lag8"),
+                  variable.name  = "rainlag", 
+                  value.name = "measurement")
+
+### RAINFALL averaged over all years
+ggplot(data = rain_lags) + 
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = Epiweek, y = measurement, color = rainlag, linetype = rainlag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Total Rainfall(mm)")) +
+  labs(x = "Epidemiology week", y = "Cases per 1,000")+
+  ggtitle("Relationship between Cases Per Thousand and Rain Total at Different Lags")+
+  facet_wrap(~Region, nrow = 2)
+
+
+#rainfall across all years... eventually put this in supplemental material
+ggplot(data = rain_lags) + 
+  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = rainlag, linetype = rainlag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Total Rainfall(mm)")) +
+  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
+  ggtitle("Relationship between Cases Per Thousand and Rain Total at Different Lags")
+
+```
+```{r}
+#create a long format for the desired lags in order to plot
+temp_lags <- melt(weath3, 
+                  idvars = c("Epiweek", "Epiyear", "DISTCODE"),
+                  measure.vars = c("tavg_lag4", "tavg_lag8" ,"tavg_lag16"),
+                  variable.name  = "templag", 
+                  value.name = "measurement")
+
+### temperature averaged over all years
+ggplot(data = temp_lags) + 
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = Epiweek, y = measurement, color = templag, linetype = templag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp(C)")) +
+  labs(x = "Epidemiology week", y = "Cases per 1,000")+
+  ggtitle("Relationship between CPT and Temperature at Different Lags over a Year")+
+  facet_wrap(~Region, nrow = 2)
+
+
+#rainfall across all years... eventually put this in supplemental material
+ggplot(data = temp_lags) + 
+  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = templag, linetype = templag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp(C)")) +
+  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
+  ggtitle("Relationship between CPT and Temperature at Different Lags over all Years")
+```
+
+```{r, include = FALSE}
+
+#these graphs do not allow for linetype legends... switched out for above graphs
+### RAINFALL averaged over all years
+# ggplot(data = weath3) + 
+#   geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="green") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag8), color="red") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag4), color="pink") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag2), color="orange")+
+#   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+#   labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+### Temperature averaged over all years
+# ggplot(data = weath3) + 
+#   geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="green") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag16), color="#9999CC") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag8), color="red") +
+#   geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag4), color="orange")+
+#   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+#   labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+# ### RAINFALL across all years
+# ggplot(data = weath3) + 
+#   geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="green") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = rainTot_lag8), color="red") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = rainTot_lag4), color="pink") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = rainTot_lag2), color="orange")+
+#   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+#   labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+### Temperature across all years
+# ggplot(data = weath3) + 
+#   geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="green") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = tavg_lag16), color="#9999CC") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = tavg_lag8), color="red") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = tavg_lag4), color="pink") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = tavg_lag2), color="orange")+
+#   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+#   labs(x = "Epidemiology week", y = "Cases per 1,000")
+
+
+
+### testing relative humidity
+# ggplot(data = weath3) +
+#   geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="orange") +
+#   geom_smooth(mapping = aes(x = hyp.date, y = rh), color="green")+
+#   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
+#   labs(x = "Epidemiology week", y = "Cases per 1,000")
+```
+
+```{r}
+#plot lagged humidity versus cpt
 ggplot(data = weath3) +
-  geom_smooth(mapping = aes(x = Epiweek, y = cpt, linetype = "solid"))+
-  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag2, linetype = "dotted"), color = "maroon4")+
-  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag4, linetype = "dashed"))+
-  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag8, linetype = "longdash"))+
-  scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average rainfall")) +
-  labs(x = "Epidemiology week", y = "Cases per 1,000")
-
-ggplot(data = weath3) +
-  geom_smooth(mapping = aes(x = Epiweek, y = cpt, linetype = "solid"))+
-  geom_smooth(mapping = aes(x = Epiweek, y = rainTot_lag2, linetype = "dotted"), color = "maroon4")+
-scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average rainfall")) +
-  labs(x = "Epidemiology week", y = "Cases per 1,000")
-              
-              
-ggplot(data = weath3) +
-  geom_smooth(mapping = aes(x = Epiweek, y = cpt))+
-  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag2))+
-  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag4))+
-  geom_smooth(mapping = aes(x = Epiweek, y = tavg_lag8))+
-  scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Weekly average temp")) +
-  labs(x = "Epidemiology week", y = "Cases per 1,000")
-
-
+  geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = Epiweek, y = rh_lag8), color="green")+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Relative Humidity (%)")) +
+  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
+  ggtitle("Relationship between CPT and Relative Humidity 8-Week lag over all Years")
 ```
 
 ```{r, include= TRUE}
-
 
 #creating cases per thousand by district and year since cases per thousand won't be correct when we are summing over the weeks 
 malaria <- as.data.frame(tapply(weath3$malaria, list(weath3$DISTCODE, weath3$Epiyear), sum))
@@ -126,51 +250,60 @@ denom <- as.data.frame(tapply(weath3$denom, list(weath3$DISTCODE, weath3$Epiyear
 colnames(denom) <- c("denom10", "denom11", "denom12", "denom13", "denom14", "denom15", "denom16")
 
 #both dataframes are the same length and in the same order so we can just divide to get cpt
-cpt <- (malaria/denom)*1000
-colnames(cpt) <- c("cpt10", "cpt11", "cpt12", "cpt13", "cpt14", "cpt15", "cpt16")
+#this calculates the average cases per thousand for each year 
+cpt1 <- (malaria/denom)*1000
+colnames(cpt1) <- c("cpt10", "cpt11", "cpt12", "cpt13", "cpt14", "cpt15", "cpt16")
+
+#cpt1 and cpt2 give the same values
+cpt2<- as.data.frame(tapply(weath3$cpt, list(weath3$DISTCODE, weath3$Epiyear), mean))
+colnames(cpt2) <- c("cpt10", "cpt11", "cpt12", "cpt13", "cpt14", "cpt15", "cpt16")
 
 
-rainTot <- as.data.frame(tapply(weath3$rainTot_lag4, list(weath3$DISTCODE, weath3$Epiyear), sum))
+#calculating total rainfall over the year
+rainTot <- as.data.frame(tapply(weath3$rainTot_lag8, list(weath3$DISTCODE, weath3$Epiyear), sum))
 colnames(rainTot) <- c("rain10", "rain11", "rain12", "rain13", "rain14", "rain15", "rain16")
+
+#calculating average temperature over the year
 tavg <- as.data.frame(tapply(weath3$tavg_lag8, list(weath3$DISTCODE, weath3$Epiyear), mean))
 colnames(tavg) <- c("t10", "t11", "t12", "t13", "t14", "t15", "t16")
 
+
+#here can we mutate each individual dataset by averaging over all 7 columns to get a total average by dist???
+
 #merge all data for plotting
-allstats <-as.data.frame(cbind(cpt, rainTot, tavg))
+allstats <-as.data.frame(cbind(cpt1, rainTot, tavg))
 
 # read in the Moz shape file for districts
 poly1 <- readShapePoly('C:/Users/Kaci/Desktop/BIOS 6640 R and Python/R Project/data_formats/Moz_admin2.shp', IDvar="DISTCODE")
 
 polydat <- SpatialPolygonsDataFrame(poly1, allstats)
 
-spplot(polydat, "cpt10", main = "Cases Per Thousand", sub = "2010")
+# spplot(polydat, "cpt10", main = "Cases Per Thousand", sub = "2010")
 
-#in spplot draw = false in the scale()
-#smooth_map(polydat)
-tm_shape(polydat) + tm_polygons("rain10", palette = "-Blues")+   tm_bubbles("cpt10", col = "t10",
-border.col = "black", border.alpha = 0.5,
- palette = "-RdYlGn", breaks = c(15, 17, 19, 21, 23, 25, 27),
-title.size = "Cases per Thousand (2010)", 
-title.col = "Temperature") +
-tm_format_World() + tm_style_gray()
- 
-summary(allstats$t10) 
-
-
+#2010 map of incidence overlayed on rainfall colored by temp
+tm_shape(polydat) + tm_polygons("rain10", palette = "Blues", 
+             title = "Total Yearly Rainfall", contrast = 0.7, border.col = "transparent")+   
+  tm_bubbles("cpt10", col = "t10",border.col = "black", border.alpha = 0.5,palette = "-RdYlGn", 
+             breaks = c(15, 17, 19, 21, 23, 25, 27),
+  title.size = "Average Cases per Thousand (2010)", 
+  title.col = "Average Yearly Temperature") +
+  tm_style_gray()+
+  tm_layout(title = "2010 Map", title.position = c("center", "top"))+
+  tm_legend(outside = TRUE, bg.color = "gray95", frame = TRUE)
 
 ```
 
 ```{r}
 
-ggplot(data = weath3, mapping = aes(x = Region, y=log_rainTot)) + 
-  geom_boxplot()+
-  facet_wrap(~Epiyear, nrow = 2)
+# ggplot(data = weath3, mapping = aes(x = Region, y=log_rainTot)) + 
+#   geom_boxplot()+
+#   facet_wrap(~Epiyear, nrow = 2)
 
-
-ggplot(data = weath3) + 
-  geom_density(mapping = aes(x = cpt,color = as.factor(Epiyear)), position = "identity")+
-  facet_wrap(~Region, nrow = 2)
-#removed linetype = as.factor(Epiyear) from aes()
+# 
+# ggplot(data = weath3) + 
+#   geom_density(mapping = aes(x = cpt,color = as.factor(Epiyear)), position = "identity")+
+#   facet_wrap(~Region, nrow = 2)
+# #removed linetype = as.factor(Epiyear) from aes()
 
 
 
@@ -187,7 +320,7 @@ tempbox
 
 #creating a log transform with 0's
 ###need to use lag variables!!!!!
-hist(weath3$rainTot)
+#hist(weath3$rainTot)
 weath3$log_rainTot <- ifelse(weath3$rainTot == 0, 0, log(weath3$rainTot))
 
 rainbox <- ggplot(data = weath3, aes(Region, log_rainTot, colour = as.factor(Epiyear))) + 
@@ -201,8 +334,15 @@ rainbox <- ggplot(data = weath3, aes(Region, log_rainTot, colour = as.factor(Epi
 
 rainbox
 
+
 ```
 
 ```{r}
 ggplot(data = weath3)+
+  geom_smooth(mapping = aes(x = hyp.date, y = cpt, color = Region, linetype = Region ))+
+  labs(color = "Region")+
+  ggtitle("Cases Per Thousand Over Time by Region")+
+  xlab("Time")+
+  ylab("Cases Per Thousand")+
+  theme_minimal()
 ```
