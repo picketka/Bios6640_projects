@@ -5,9 +5,14 @@ date: "October 22, 2018"
 output: word_document
 ---
 
+## Background
+Malaria is a parasitic illness transmitted by mosquitos in tropical and subtropical areas. Infection can be moderate to severe and presents as flu like symptoms such as fever, chills, nausea and vomiting, and body aches.  Severe cases can lead to death and include more extreme symptoms such as organ failure, anemia due to hemolysis and neurologic defects especially in children. Typically malaria is curable if diagnosed and treated quickly and correctly, but in areas with high incidence prevention of infection is more effective.   
+	In order to effectively prevent malaria, insecticide can be sprayed and bed nets can be distributed, but the efficacy of these measures decays over time.  Due to this issue there is a need to understand the life cycle of malaria and what affects levels of incidence to be able to predict the best time to apply insecticide measures.   
+	The life cycle of malaria parasites is split between a human host and the Anopheles mosquito. The parasite starts its life in a human liver as a sporozoite delivered by a mosquito, invades the bloodstream where it replicates and matures causing clinical manifestations of disease. The gametocytes are then ingested by a mosquito during a blood meal where the male and female gametocytes merge to form an oocyst that releases sporozoite to start the cycle over again. For this cycle to happen, an ideal environment must be available for mosquitos to breed, survive long enough to have a blood meal containing sporozoites, and incubate the parasite during the complete growth cycle. This means that adequate rainfall for water collection must happen to allow a 9 to 12-day mosquito development. The mosquito must then survive long enough to have a blood meal and incubate the parasite for 9 to 21 days to maturation. This requires temperatures of 25°C or higher as well as adequate humidity and rain. Once a human is infected with the parasite the incubation from liver to blood stream when symptoms present ranges from 7 to 30 days.
+	The complex life cycle shown above illustrates that the issue of determining what weather trends are associated with observed incidence rates takes diligence. From ambient weather to human symptoms the time gap can be anywhere from 2 weeks to 16 weeks or possibly longer. Understanding what this relationship is, and how weather patterns act in certain areas will allow better knowledge of when and where to implement preventative measures.   
 
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=FALSE, message= FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 op <- par()
 options(width=80)
@@ -40,29 +45,23 @@ weath2$cpt <- (weath2$malaria/weath2$denom)*1000
 
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Introduction
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+In this study information about weather trends and Malaria was collected from 142 districts in Mozambique. The goal of the analysis was a preliminary review of the relationships between weather trends and malaria incidence in the population under 5 years of age with a long-term goal of eventually implementing a prevention plan in the most effective way. Data was collected at the district level each week from the years of 2010 to 2016, with partial information available for 2017. Weather variables of interest included weekly data on rain totals, average temperatures, relative humidity, and surface barometric pressure. Population of the entire district was given along with the proportion of the population under 5 years of age, and the number of cases of malaria reported each week. Each district was also categorized into 11 provinces and 4 regions to allow for spatial pattern analysis. The main goal was to determine if malaria incidence was variable over time or space and how this variability was affected by weather patterns.   
 
-```{r}
+##Methods
+Malaria incidence was represented by cases per 1000 population in children under 5. This was calculated using malaria cases in the under 5 population divided by the product of total population of the district and proportion of population under 5. This was calculated at the district level at each week and as an average over the weeks for each district. Weather variables including total weekly rain total and average weekly temperature were tested for optimal lag time compared to malaria incidence using a cross correlation function and inspection of behavior of different lags versus incidence over time. Relationships between and within weather variables, incidence and time were explored graphically to determine trends.   
+
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #make multiple lags for each of the weather variables to find best weather -> symptoms incubation time
 #need to lag by number of weeks since cases are calculated on a weekly basis
-#need to lag within year because epiweek repeats for each year
 # weath2$rainTot_lag4 <- weath2 %>% group_by(weath2$Epiyear) %>% lag(weath2$Epiweek,4)
-#need to lag multiple columns in the same way... use an apply function?-- need to do this for 2 4 8 week lags for 13 of 26 variables
+
 weath3 <- weath2 %>% as_tibble() %>% mutate(
   rainTot_lag2 =lag(rainTot,2),
   tavg_lag2 =lag(tavg,2),
   rainTot_lag4 =lag(rainTot,4),
-  tabove35_lag4 = lag(tabove35,4),
-  tabove30_lag4 = lag(tabove30,4),
-  tbelow20_lag4 = lag(tbelow20,4),
-  tbelow15_lag4 = lag(tbelow15,4),
-  pabove1_lag4 = lag(pabove1,4),
-  pabove50_lag4 = lag(pabove50,4),
-  pabove100_lag4 = lag(pabove100, 4),
   rain_lag4 = lag(rain,4),
   tavg_lag4 =lag(tavg,4),
   rh_lag4 = lag(rh, 4),
@@ -92,9 +91,14 @@ kable(tab1)
 #test to see if the lag worked
 #head(weath3[,'rainTot_lag4'])
 ```
-```{r}
+
+##Results
+A plot of the smoothed behavior of weekly average temperature revealed that rainfall and temperature share a similar trend but are not completely associated so the lag time for rainfall compared to incidence may not be identical to that of temperature. Figure 1 shows that the first few weeks and the last few weeks of the year tend to be the rainy season and midyear is both drier and cooler, but temperature tends to increase before rainfall does.  
+
+*Figure 1. Smoothed Plot of Temperature and Rain over time*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #first relationship: are temp and rain associated with eachother is there possibly a lag between them
-ggplot(data = weath3) + 
+rain_temp <- ggplot(data = weath3) + 
   geom_smooth(mapping = aes(x = Epiweek, y = rainTot), color="blue") +
   geom_smooth(mapping = aes(x = Epiweek, y = tavg), color="orange")+
   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp")) +
@@ -105,14 +109,20 @@ ggplot(data = weath3) +
 
 
 
+print(rain_temp)
 
 
 ```
+When observing the cross-correlation functions for both rainfall and temperature compared to Cases Per Thousand (CPT) it appears that the optimal lag time for rainfall occurs around 4 to 8 weeks before incidence and the temperature lag that is most correlated is between 8 and 16 weeks (Figures 2-3).  
 
-```{r, include=TRUE}
+*Figure 2. Cross Correlation of Cases per Thousand and Weekly Rain Total*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #plot of autocorrlation of variables at different lag points
 lag_opt_rain <- ccf(weath3$rainTot,weath3$cpt, type = "correlation" )
+```
 
+*Figure 3. Cross Correlation of Cases per Thousand and Weekly Average Temperature*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 lag_opt_temp <- ccf(weath3$tavg,weath3$cpt, type = "correlation" )
 
 #looking at if high rain levels are associated with high temp levels or if there is a lag
@@ -125,8 +135,10 @@ lag_opt_temp <- ccf(weath3$tavg,weath3$cpt, type = "correlation" )
 #create a week/ year variable so we can look over the years and not just look at an average of years
 
 ```
+This can also be seen when plotting smoothed curves of a few of the most clinically relevant lags overlaid with CPT. The lag of 8 weeks appeared to have the most similar peaks and decreases to CPT across the regions for both rainfall and temperature(Figure 4-5). This relationship can be seen with other weather variables as well as Figure 6 Relative Humidity as a percentage has a similar 8 week lagged relationship with CPT. All further mapping and plotting was done with a lag of 8 weeks for both rain and temperature when associations with CPT were considered.  
 
-```{r}
+*Figure 4. Smoothed curves of CPT and Different Lags for Weekly Rain Total*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #create a long format for the desired lags in order to plot
 rain_lags <- melt(weath3, 
                   idvars = c("Epiweek", "Epiyear", "DISTCODE"),
@@ -135,25 +147,20 @@ rain_lags <- melt(weath3,
                   value.name = "measurement")
 
 ### RAINFALL averaged over all years
-ggplot(data = rain_lags) + 
+rainy <-ggplot(data = rain_lags) + 
   geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
   geom_smooth(mapping = aes(x = Epiweek, y = measurement, color = rainlag, linetype = rainlag ))+
   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Total Rainfall(mm)")) +
   labs(x = "Epidemiology week", y = "Cases per 1,000")+
   ggtitle("Relationship between Cases Per Thousand and Rain Total at Different Lags")+
   facet_wrap(~Region, nrow = 2)
-
-
-#rainfall across all years... eventually put this in supplemental material
-ggplot(data = rain_lags) + 
-  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
-  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = rainlag, linetype = rainlag ))+
-  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Total Rainfall(mm)")) +
-  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
-  ggtitle("Relationship between Cases Per Thousand and Rain Total at Different Lags")
+print(rainy, caption = "Figure 4. ")
 
 ```
-```{r}
+
+
+*Figure 5. Smoothed curves of CPT and Different Lags for Weekly Average Temperature*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #create a long format for the desired lags in order to plot
 temp_lags <- melt(weath3, 
                   idvars = c("Epiweek", "Epiyear", "DISTCODE"),
@@ -162,25 +169,20 @@ temp_lags <- melt(weath3,
                   value.name = "measurement")
 
 ### temperature averaged over all years
-ggplot(data = temp_lags) + 
+hot <- ggplot(data = temp_lags) + 
   geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
   geom_smooth(mapping = aes(x = Epiweek, y = measurement, color = templag, linetype = templag ))+
   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp(C)")) +
   labs(x = "Epidemiology week", y = "Cases per 1,000")+
   ggtitle("Relationship between CPT and Temperature at Different Lags over a Year")+
   facet_wrap(~Region, nrow = 2)
+print(hot, caption = "Figure 4. Smoothed curves of CPT and Different Lags for Weekly Average Temperature")
 
 
-#rainfall across all years... eventually put this in supplemental material
-ggplot(data = temp_lags) + 
-  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
-  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = templag, linetype = templag ))+
-  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp(C)")) +
-  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
-  ggtitle("Relationship between CPT and Temperature at Different Lags over all Years")
 ```
 
-```{r, include = FALSE}
+
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 
 #these graphs do not allow for linetype legends... switched out for above graphs
 ### RAINFALL averaged over all years
@@ -230,17 +232,22 @@ ggplot(data = temp_lags) +
 #   labs(x = "Epidemiology week", y = "Cases per 1,000")
 ```
 
-```{r}
+
+*Figure 6. Smoothed curves of CPT and Different Lags for Weekly Rain Total*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #plot lagged humidity versus cpt
 ggplot(data = weath3) +
   geom_smooth(mapping = aes(x = Epiweek, y = cpt), color="black") +
   geom_smooth(mapping = aes(x = Epiweek, y = rh_lag8), color="green")+
   scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Relative Humidity (%)")) +
   labs(x = "Epidemiology Year", y = "Cases per 1,000")+
-  ggtitle("Relationship between CPT and Relative Humidity 8-Week lag over all Years")
+  ggtitle("Relationship between CPT and Relative Humidity 8-Week lag over all Years")+
+  theme_minimal()
 ```
+A map depicting average CPT in 2010 shows that Malaria incidence is different across regions with the Coastal and Northern regions having the highest amounts of clustering (Figure 7). This is very interrelated with large amounts of rainfall and temperatures ranging from 21 to 27. It appears as if the temperatures that are warmer than 21 but lower than 25 create the best environment for incidence. Rainfall seems to be necessary in small amounts as there seems to be less instances in areas with a lot of rainfall. The trend in 2010 is noticeable so it would be of interest to see how this trend changes over the 7 years of data. 
 
-```{r, include= TRUE}
+*Figure 7. Map of Weather and Incidence Patterns by District in 2010*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 
 #creating cases per thousand by district and year since cases per thousand won't be correct when we are summing over the weeks 
 malaria <- as.data.frame(tapply(weath3$malaria, list(weath3$DISTCODE, weath3$Epiyear), sum))
@@ -281,7 +288,7 @@ polydat <- SpatialPolygonsDataFrame(poly1, allstats)
 # spplot(polydat, "cpt10", main = "Cases Per Thousand", sub = "2010")
 
 #2010 map of incidence overlayed on rainfall colored by temp
-tm_shape(polydat) + tm_polygons("rain10", palette = "Blues", 
+the_map<-tm_shape(polydat) + tm_polygons("rain10", palette = "Blues", 
              title = "Total Yearly Rainfall", contrast = 0.7, border.col = "transparent")+   
   tm_bubbles("cpt10", col = "t10",border.col = "black", border.alpha = 0.5,palette = "-RdYlGn", 
              breaks = c(15, 17, 19, 21, 23, 25, 27),
@@ -291,9 +298,13 @@ tm_shape(polydat) + tm_polygons("rain10", palette = "Blues",
   tm_layout(title = "2010 Map", title.position = c("center", "top"))+
   tm_legend(outside = TRUE, bg.color = "gray95", frame = TRUE)
 
-```
+print(the_map)
 
-```{r}
+```
+Temperature trends tended to have similar ranges across regions with slightly warmer temperatures noticeable in the Coastal and Center regions. These trends are not highly variable over the years but a slight increase in the median temperatures can be seen (Figure 8). A graph of rainfall with a log transform on all values other than 0 was also performed and showed now real difference in the average weekly rainfall in different districts and showed only slight increases in rainfall in the Northern region over time (Figure 9). 
+
+*Figure 8. Boxplot of Temperature by Year*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 
 # ggplot(data = weath3, mapping = aes(x = Region, y=log_rainTot)) + 
 #   geom_boxplot()+
@@ -312,14 +323,17 @@ tempbox <- ggplot(data = weath3, aes(Region, tavg, colour = as.factor(Epiyear)))
   ggtitle("Average Weekly Temperature over Time by Region")+
   scale_color_brewer(palette = "YlOrRd")+
   xlab("Region")+
-  ylab("Temperature")+ 
+  ylab("Temperature (C)")+ 
   labs(colour="Year")+
   theme_dark()
 
-tempbox
+print(tempbox)
+```
 
+
+*Figure 9. Boxplot of Weekly Rainfall by Year
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 #creating a log transform with 0's
-###need to use lag variables!!!!!
 #hist(weath3$rainTot)
 weath3$log_rainTot <- ifelse(weath3$rainTot == 0, 0, log(weath3$rainTot))
 
@@ -332,12 +346,15 @@ rainbox <- ggplot(data = weath3, aes(Region, log_rainTot, colour = as.factor(Epi
   labs(colour="Year")+
    theme_dark()
 
-rainbox
+print(rainbox)
+
 
 
 ```
+Over the last 7 years counts of Malaria were relatively constant up until 2014 when increasing cases were seen and it appears as if there were outbreaks in mid-2014 and early 2017(Figure 10). This trend was consistent across region but was most noticeable in the Northern and Coastal regions where the highest incidence was seen. 
 
-```{r}
+*Figure 10. Cases Per Thousand Over Time by Region*
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
 ggplot(data = weath3)+
   geom_smooth(mapping = aes(x = hyp.date, y = cpt, color = Region, linetype = Region ))+
   labs(color = "Region")+
@@ -346,3 +363,42 @@ ggplot(data = weath3)+
   ylab("Cases Per Thousand")+
   theme_minimal()
 ```
+
+##Conclusions
+  In general these graphs gave good insight into the fact that it is possible to predict a relationship between Malaria incidence and weather patterns. Warm areas with moderate amounts of average rainfall tended to breed to most mosquitos that transmit Malaria. It appears that seasonal patterns should be considered and the times early and late in the year with warm wet periods should be the time when preventetive measures should be planned 8 to 16 weeks after these weather patterns. 
+  
+  A consideration that may need to be made is if the relationship between the CPT incidence rate and weather patterns changes over the years since the graphs that were performed today were mainly performed for values averaged across years. Supplemental materials show smoothed plots of the relationship between total weekly rainfall and average temperature across the years to show there may be some differences in the trend over the years(Appendix A).    
+  
+The map comparing the clustering of cases compared to rainfall and temperature showed that extreme temperatures or large amounts of rain tended decrease incidence. This showed that the cultivation of the Malaria requires enough warmth and moisture to allow both the parasite and the mosquito to thrive but large amounts of rain or extreme temperatures threaten this process. Careful consideration needs to be taken in how to classify rainfall. Since seasonal patterns are present using weekly averages for rain instead of total rainfall may mask some of the rain effects areas with spurts of dry time and others of downpours will appear similar to areas where there is consistent small amounts of rainfall. 
+	In future investigation, it may be interesting to look at average rainfall excluding days with no rain in order to determine the effect of frequency versus quantity of rain on incidence. 
+
+##References 
+https://www.cdc.gov/malaria/about/biology/index.html
+
+
+
+##Suplemental Materials/ Appendix A
+```{r, echo=FALSE, warning=FALSE, message= FALSE}
+#rainfall across all years... eventually put this in supplemental material
+rainy_long <- ggplot(data = rain_lags) + 
+  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = rainlag, linetype = rainlag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly Total Rainfall(mm)")) +
+  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
+  ggtitle("Relationship between Cases Per Thousand and Rain Total at Different Lags")
+
+rainy_long
+
+#rainfall across all years... eventually put this in supplemental material
+hot_long <- ggplot(data = temp_lags) + 
+  geom_smooth(mapping = aes(x = hyp.date, y = cpt), color="black") +
+  geom_smooth(mapping = aes(x = hyp.date, y = measurement, color = templag, linetype = templag ))+
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Weekly average temp(C)")) +
+  labs(x = "Epidemiology Year", y = "Cases per 1,000")+
+  ggtitle("Relationship between CPT and Temperature at Different Lags over all Years")
+
+hot_long
+```
+
+*code and plots were developed primarily with Emma Jones and Melissa Lowe
+*github location : https://github.com/picketka/Bios6640_projects/tree/master/R_project
